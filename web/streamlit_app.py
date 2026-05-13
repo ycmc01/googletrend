@@ -35,15 +35,18 @@ if companies.empty:
 else:
     rows = []
     for _, c in companies.iterrows():
-        ticker = c["ticker"]
-        seg_count = (segments["ticker"].str.upper() == ticker).sum() if not segments.empty else 0
+        ticker = str(c["ticker"])
+        seg_count = (segments["ticker"].astype(str).str.upper() == ticker.upper()).sum() if not segments.empty else 0
         if not weights.empty:
-            w = weights[weights["ticker"].str.upper() == ticker]
+            w = weights[weights["ticker"].astype(str).str.upper() == ticker.upper()]
             q_count = w["quarter_end_date"].nunique()
-            latest = w["quarter_end_date"].max()
-            latest_str = latest.date().isoformat() if q_count else "—"
+            if q_count:
+                latest = pd.to_datetime(w["quarter_end_date"]).max()
+                latest_str = latest.date().isoformat() if pd.notna(latest) else "-"
+            else:
+                latest_str = "-"
         else:
-            q_count, latest_str = 0, "—"
+            q_count, latest_str = 0, "-"
         rows.append({
             "Ticker": ticker,
             "Name": c["name"],

@@ -17,10 +17,12 @@ WEIGHT_COLS = ["ticker", "fiscal_quarter", "quarter_end_date", "segment", "reven
 def load_companies() -> pd.DataFrame:
     if not COMPANIES_CSV.exists():
         return pd.DataFrame(columns=COMPANY_COLS)
-    return pd.read_csv(COMPANIES_CSV)
+    return pd.read_csv(COMPANIES_CSV, dtype={"ticker": str})
 
 
 def save_companies(df: pd.DataFrame) -> None:
+    df = df.copy()
+    df["ticker"] = df["ticker"].astype(str)
     df = df[COMPANY_COLS].drop_duplicates(subset=["ticker"], keep="last")
     df.to_csv(COMPANIES_CSV, index=False)
 
@@ -34,13 +36,15 @@ def get_company(ticker: str) -> pd.Series | None:
 def load_segments(ticker: str | None = None) -> pd.DataFrame:
     if not SEGMENTS_CSV.exists():
         return pd.DataFrame(columns=SEGMENT_COLS)
-    df = pd.read_csv(SEGMENTS_CSV)
+    df = pd.read_csv(SEGMENTS_CSV, dtype={"ticker": str})
     if ticker is not None:
-        df = df[df["ticker"].str.upper() == ticker.upper()].reset_index(drop=True)
+        df = df[df["ticker"].astype(str).str.upper() == ticker.upper()].reset_index(drop=True)
     return df
 
 
 def save_segments(df: pd.DataFrame) -> None:
+    df = df.copy()
+    df["ticker"] = df["ticker"].astype(str)
     df = df[SEGMENT_COLS].drop_duplicates(subset=["ticker", "segment_name"], keep="last")
     df = df.sort_values(["ticker", "segment_name"]).reset_index(drop=True)
     df.to_csv(SEGMENTS_CSV, index=False)
