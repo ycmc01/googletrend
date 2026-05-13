@@ -1,8 +1,24 @@
 # GITS Scanner
 
-Revenue-weighted Google Trends index for **nowcasting** any public company's quarterly results.
+Revenue-weighted Google Trends index for **nowcasting** any public company's quarterly results. Works for **Taiwan and US stocks** — Taiwan data auto-imported from XQAPI, US data via yfinance.
 
 **Reframe**: this is a nowcasting tool, not a leading-indicator tool. Quarterly earnings are released 30-45 days after the quarter end, so a calendar-coincident GITS at quarter-end gives meaningful informational edge over the official 10-Q.
+
+## Web UI (recommended)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+streamlit run web/streamlit_app.py
+```
+
+Opens at <http://localhost:8501> with five pages:
+1. **🏢 Companies** — Register a ticker; click *Lookup via XQAPI* for TW stocks to auto-fill company name + industry
+2. **🏷 Segments** — Define keyword groups per company (default: single `Total` segment with company name)
+3. **💰 Weights** — Click *Import revenue* to pull 16+ quarters from XQAPI, or edit manually
+4. **⚙ Pipeline** — Run Google Trends + price fetch + GITS compute + HTML report
+5. **📈 Report** — View weighted segment contribution, three-axis chart, deseasonalized lead-lag — all interactive
+
+For headless / scripting use, the same operations are available via CLI (see below).
 
 ## Productized workflow
 

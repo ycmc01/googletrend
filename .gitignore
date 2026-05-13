@@ -24,6 +24,11 @@ venv/
 notebooks/report_*.html
 notebooks/*_executed.ipynb
 
+# Streamlit runtime
+data/streamlit.log
+data/streamlit.err
+data/streamlit.pid
+
 # Env
 .env
 .env.local
