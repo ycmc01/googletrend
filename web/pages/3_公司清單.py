@@ -22,78 +22,106 @@ from gits.xqapi import get_basic_info
 
 st.set_page_config(page_title="GITS — 公司清單", page_icon="🏢", layout="wide")
 st.title("🏢 公司清單")
-st.caption("註冊要追蹤的股票。台股輸入 4 位數代碼會自動透過 XQAPI 帶入公司全名。")
+st.caption("註冊要追蹤的股票。點「🔍 從 XQAPI 查詢」後，公司名稱與備註會自動帶入下方欄位。")
+
+
+def _xqapi_lookup():
+    """XQAPI 查詢 callback — 寫入 widget 的 session_state，下次 rerender 自動帶入。"""
+    ticker = (st.session_state.get("co_ticker_field") or "").strip()
+    if not ticker:
+        st.session_state._lookup_msg = ("warning", "請先輸入股票代碼")
+        return
+    try:
+        payload = get_basic_info(ticker, fields="公司全名,交易所產業分類,所屬產業,掛牌交易所")
+    except Exception as e:
+        st.session_state._lookup_msg = ("error", f"XQAPI 查詢失敗：{e}")
+        return
+
+    name_raw = industry = sector = exchange = None
+    for f in payload.get("fields", []):
+        cn = f.get("cName")
+        vals = f.get("values") or []
+        v = vals[0].get("value") if vals else None
+        if cn == "公司全名": name_raw = v
+        elif cn == "交易所產業分類": industry = v
+        elif cn == "所屬產業": sector = v
+        elif cn == "掛牌交易所": exchange = v
+
+    if not name_raw:
+        st.session_state._lookup_msg = ("warning", f"XQAPI 找不到 {ticker} 的公司名稱")
+        return
+
+    # 直接寫入 widget 的 session_state
+    st.session_state.co_name_field = name_raw
+    notes_parts = [p for p in [industry, sector] if p]
+    if notes_parts:
+        st.session_state.co_notes_field = " / ".join(notes_parts)
+
+    extra = f"（{exchange}）" if exchange else ""
+    st.session_state._lookup_msg = ("success", f"已自動帶入：{name_raw} {extra}")
+
+
+def _save_company():
+    """儲存公司 callback。"""
+    ticker = (st.session_state.get("co_ticker_field") or "").strip().upper()
+    name = (st.session_state.get("co_name_field") or "").strip()
+    fy_end = int(st.session_state.get("co_fy_end_field") or 12)
+    notes = (st.session_state.get("co_notes_field") or "").strip()
+
+    if not ticker:
+        st.session_state._save_msg = ("error", "請輸入股票代碼")
+        return
+    if not name:
+        st.session_state._save_msg = ("error", "請輸入公司名稱（可先點查詢自動帶入）")
+        return
+
+    bare = ticker.split(".")[0]
+    df = load_companies()
+    df = df[df["ticker"].astype(str).str.upper() != bare]
+    new_row = pd.DataFrame([{
+        "ticker": bare, "name": name,
+        "fiscal_year_end_month": fy_end, "notes": notes,
+    }])
+    save_companies(pd.concat([df, new_row], ignore_index=True))
+    st.session_state._save_msg = ("success", f"已儲存 {bare}（{name}）")
+    # 清空表單供下一筆使用
+    st.session_state.co_ticker_field = ""
+    st.session_state.co_name_field = ""
+    st.session_state.co_notes_field = ""
+    st.session_state.co_fy_end_field = 12
+
 
 st.subheader("新增公司")
 
-with st.form("add_company", clear_on_submit=False):
-    col1, col2 = st.columns([2, 3])
-    ticker_input = col1.text_input(
-        "股票代碼", placeholder="例：2330 或 AAPL",
-        help="台股輸入數字代碼，美股輸入英文代號"
-    )
-    name_input = col2.text_input("公司名稱", placeholder="點下面的 🔍 自動查詢")
-    fy_end = col1.number_input("會計年度結束月份", min_value=1, max_value=12, value=12, step=1,
-                                help="台股大多 12 月、Apple 9 月")
-    notes = col2.text_input("備註（選填）", value="")
+# 初始化 session_state 鍵
+st.session_state.setdefault("co_ticker_field", "")
+st.session_state.setdefault("co_name_field", "")
+st.session_state.setdefault("co_fy_end_field", 12)
+st.session_state.setdefault("co_notes_field", "")
 
-    bcol1, bcol2 = st.columns([1, 4])
-    lookup = bcol1.form_submit_button("🔍 從 XQAPI 查詢", use_container_width=True)
-    submit = bcol2.form_submit_button("✅ 儲存公司", type="primary", use_container_width=True)
+col1, col2 = st.columns([2, 3])
+col1.text_input("股票代碼", key="co_ticker_field", placeholder="例：2330 或 AMD",
+                help="台股輸入數字代碼，美股輸入英文代號")
+col2.text_input("公司名稱", key="co_name_field", placeholder="點下面的 🔍 自動查詢")
+col1.number_input("會計年度結束月份", min_value=1, max_value=12, step=1, key="co_fy_end_field",
+                  help="台股大多 12 月、Apple 9 月、Nvidia 1 月")
+col2.text_input("備註（選填）", key="co_notes_field")
 
-if lookup:
-    if not ticker_input.strip():
-        st.warning("請先輸入股票代碼")
-    else:
-        try:
-            with st.spinner(f"正在查詢 {ticker_input}…"):
-                payload = get_basic_info(
-                    ticker_input,
-                    fields="公司全名,交易所產業分類,所屬產業,掛牌交易所",
-                )
-        except Exception as e:
-            st.error(f"XQAPI 查詢失敗：{e}")
-        else:
-            name_raw = industry = sector = exchange = None
-            for f in payload.get("fields", []):
-                if f.get("cName") == "公司全名":
-                    name_raw = f["values"][0]["value"]
-                elif f.get("cName") == "交易所產業分類":
-                    industry = f["values"][0]["value"]
-                elif f.get("cName") == "所屬產業":
-                    sector = f["values"][0]["value"]
-                elif f.get("cName") == "掛牌交易所":
-                    exchange = f["values"][0]["value"]
+bcol1, bcol2 = st.columns([1, 4])
+bcol1.button("🔍 從 XQAPI 查詢", on_click=_xqapi_lookup, use_container_width=True)
+bcol2.button("✅ 儲存公司", on_click=_save_company, type="primary", use_container_width=True)
 
-            st.success(f"找到：**{name_raw}**　·　交易所：{exchange}　·　產業：{industry}")
-            if sector:
-                st.caption(f"所屬產業：{sector}")
-            st.info("把以下資訊複製到上方表單，然後按 **儲存公司**：")
-            st.code(
-                f"公司名稱：{name_raw}\n備註：{industry or ''} / {sector or ''}",
-                language=None,
-            )
+# 顯示 callback 設定的訊息
+if msg := st.session_state.pop("_lookup_msg", None):
+    severity, text = msg
+    getattr(st, severity)(text)
 
-if submit:
-    ticker = ticker_input.strip().upper()
-    if "." not in ticker:
-        ticker = (ticker + ".TW") if ticker.isdigit() else (ticker + ".US")
-    bare_ticker = ticker.split(".")[0]
-
-    if not name_input.strip():
-        st.error("請輸入公司名稱")
-    else:
-        df = load_companies()
-        df = df[df["ticker"].astype(str).str.upper() != bare_ticker]
-        new_row = pd.DataFrame([{
-            "ticker": bare_ticker,
-            "name": name_input.strip(),
-            "fiscal_year_end_month": int(fy_end),
-            "notes": notes,
-        }])
-        save_companies(pd.concat([df, new_row], ignore_index=True))
-        st.success(f"已儲存 {bare_ticker}（{name_input.strip()}）")
+if msg := st.session_state.pop("_save_msg", None):
+    severity, text = msg
+    getattr(st, severity)(text)
+    if severity == "success":
         st.balloons()
+        st.rerun()  # 重整下方表格
 
 st.divider()
 
