@@ -1,4 +1,4 @@
-"""營收資料 — 從 XQAPI 匯入季營收或手動編輯。"""
+"""營收資料 — 查看與編輯公司的季營收（自動匯入由公司清單頁負責）。"""
 from __future__ import annotations
 
 import sys
@@ -15,11 +15,11 @@ from gits.xqapi import get_quarterly_financial_report, quarterly_revenue_to_rows
 
 st.set_page_config(page_title="GITS — 營收資料", page_icon="💰", layout="wide")
 st.title("💰 營收資料")
-st.caption("各公司季度營收（以原報告貨幣的百萬為單位）。")
+st.caption("各公司季營收（以原報告貨幣的百萬為單位）。新增公司時會自動匯入；本頁主要用來檢視與重新匯入。")
 
 companies = load_companies()
 if companies.empty:
-    st.warning("請先到 **🏢 公司清單** 註冊公司。")
+    st.warning("請先到 **🏢 公司清單** 註冊公司。新增時會自動匯入營收。")
     st.stop()
 
 ticker = st.selectbox("選擇公司", companies["ticker"].astype(str).tolist())
@@ -27,38 +27,53 @@ ticker = st.selectbox("選擇公司", companies["ticker"].astype(str).tolist())
 all_weights = load_weights()
 w = all_weights[all_weights["ticker"].astype(str).str.upper() == ticker.upper()].copy()
 
-st.subheader("從 XQAPI 匯入")
-c1, c2, c3 = st.columns([1, 1, 3])
-count = c1.number_input("匯入季數", min_value=4, max_value=40, value=16, step=1)
-import_btn = c2.button("📥 匯入營收", type="primary", use_container_width=True)
-c3.caption("使用 `/datamatrix/finance` 端點 `financial-report` 指標、period=Q。台股、美股皆支援。")
 
-if import_btn:
+def _do_reimport():
+    """重新從 XQAPI 匯入 callback。"""
+    tk = st.session_state.get("rev_ticker_for_reimport", "").upper()
+    cnt = int(st.session_state.get("rev_count_for_reimport", 16))
+    if not tk:
+        return
     try:
-        with st.spinner(f"正在匯入 {ticker} 的 {count} 季營收…"):
-            payload = get_quarterly_financial_report(ticker, count=int(count))
-        rows = quarterly_revenue_to_rows(payload, ticker)
+        payload = get_quarterly_financial_report(tk, count=cnt)
+        rows = quarterly_revenue_to_rows(payload, tk)
     except Exception as e:
-        st.error(f"匯入失敗：{e}")
-        rows = []
+        st.session_state._rev_msg = ("error", f"匯入失敗：{e}")
+        return
 
     if not rows:
-        st.warning("XQAPI 沒回傳季營收。代碼可能不支援或格式錯誤。")
-    else:
-        new_df = pd.DataFrame(rows)
-        keep = all_weights[~(
-            (all_weights["ticker"].astype(str).str.upper() == ticker.upper())
-            & (all_weights["segment"] == "Total")
-        )]
-        save_weights(pd.concat([keep, new_df], ignore_index=True))
-        st.success(f"已將 {len(new_df)} 季匯入 **Total** segment（{ticker}）")
+        st.session_state._rev_msg = ("warning", "XQAPI 沒回傳營收（代碼可能不支援）")
+        return
+
+    new_df = pd.DataFrame(rows)
+    aw = load_weights()
+    keep = aw[~(
+        (aw["ticker"].astype(str).str.upper() == tk.upper())
+        & (aw["segment"] == "Total")
+    )]
+    save_weights(pd.concat([keep, new_df], ignore_index=True))
+    st.session_state._rev_msg = ("success", f"已重新匯入 {len(new_df)} 季營收到 **Total** segment（{tk}）")
+
+
+# 重新匯入區
+st.subheader("🔄 重新從 XQAPI 匯入")
+c1, c2, c3 = st.columns([1, 1, 3])
+st.session_state["rev_ticker_for_reimport"] = ticker
+c1.number_input("匯入季數", min_value=4, max_value=40, value=16, step=1, key="rev_count_for_reimport")
+c2.button("📥 重新匯入", type="primary", on_click=_do_reimport, use_container_width=True)
+c3.caption("會覆寫該公司現有的 **Total** segment 資料。其他 segment（如手動填入的 iPhone/Mac 等）不受影響。")
+
+if msg := st.session_state.pop("_rev_msg", None):
+    severity, text = msg
+    getattr(st, severity)(text)
+    if severity == "success":
         st.rerun()
 
 st.divider()
 
 st.subheader(f"{ticker} 的營收列")
 if w.empty:
-    st.info("尚無營收資料。點上方 **匯入營收** 或直接編輯 CSV。")
+    st.info("尚無營收資料。可以點上方 **重新匯入** 或到 **🏢 公司清單** 新增公司（會自動匯入）。")
 else:
     wide = w.pivot_table(
         index=["fiscal_quarter", "quarter_end_date"],
