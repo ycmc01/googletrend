@@ -95,8 +95,14 @@ def fetch_cross_segment_trends(
     pytrends = TrendReq(**PYTRENDS_KWARGS)
     df = _build_and_fetch(pytrends, queries, timeframe, geo)
 
+    # Drop the in-progress week — Google Trends flags it with isPartial=True
+    # because the daily samples for the current week aren't complete yet.
+    # Including it under-counts the value for the most recent bar.
     if "isPartial" in df.columns:
-        df = df.drop(columns=["isPartial"])
+        n_before = len(df)
+        df = df[df["isPartial"] != True].drop(columns=["isPartial"])  # noqa: E712
+        if n_before > len(df):
+            console.print(f"[yellow]  Dropped {n_before - len(df)} partial week(s) from the end[/yellow]")
 
     rename_map = dict(zip(queries, segments_df["segment_name"].tolist(), strict=True))
     df = df.rename(columns=rename_map)
