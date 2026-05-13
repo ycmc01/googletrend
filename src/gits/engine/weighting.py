@@ -73,6 +73,11 @@ def compute_gits_index(
     Returns:
         DataFrame indexed by date with one column per segment (weighted contribution)
         plus a 'gits' column (sum across segments).
+
+    Fallback: if `weights_long` only contains a single 'Total' segment (typical for
+    Taiwan stocks where 10-Q discloses only total revenue), the total weight is
+    distributed equally across all trend segments — so GITS becomes the simple
+    average of segment RSVs, scaled by the company's total revenue weight (=1.0).
     """
     traffic = segment_traffic_wide.copy()
     traffic.index = pd.to_datetime(traffic.index)
@@ -80,10 +85,25 @@ def compute_gits_index(
     weights_wide = forward_fill_weights(weights_long, traffic.index)
 
     common_segments = [c for c in traffic.columns if c in weights_wide.columns]
+
+    if not common_segments and "Total" in weights_wide.columns:
+        trend_segments = list(traffic.columns)
+        equal_share = 1.0 / max(len(trend_segments), 1)
+        for seg in trend_segments:
+            weights_wide[seg] = weights_wide["Total"] * equal_share
+        common_segments = trend_segments
+        print(
+            f"[compute_gits] No segment-level revenue split available; "
+            f"distributing 'Total' weight equally across {len(trend_segments)} trend "
+            f"segment(s): {trend_segments} (each gets {equal_share:.3f})"
+        )
+
     if not common_segments:
         raise RuntimeError(
             f"No overlap between traffic segments {list(traffic.columns)} "
-            f"and weight segments {list(weights_wide.columns)}"
+            f"and weight segments {list(weights_wide.columns)}. "
+            f"Either rename a weight row to match a trend segment, or add a "
+            f"'Total' weight row that the engine can auto-distribute."
         )
 
     if new_product_weights:
