@@ -54,8 +54,8 @@ def load_weights(ticker: str | None = None) -> pd.DataFrame:
     if not REVENUE_WEIGHTS_CSV.exists():
         return pd.DataFrame(columns=WEIGHT_COLS)
     df = pd.read_csv(REVENUE_WEIGHTS_CSV, dtype={"ticker": str})
-    # robust parse: handles both '2024-06-29' and '2024-06-29 00:00:00'
-    df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce")
+    # robust parse with format='mixed' to handle YYYY-MM-DD and YYYY-MM-DD HH:MM:SS
+    df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce", format="mixed")
     if ticker is not None:
         df = df[df["ticker"].astype(str).str.upper() == ticker.upper()].reset_index(drop=True)
     return df
@@ -64,9 +64,14 @@ def load_weights(ticker: str | None = None) -> pd.DataFrame:
 def save_weights(df: pd.DataFrame) -> None:
     df = df.copy()
     # Cast to string first so pd.to_datetime sees a uniform input (concat between
-    # datetime64 and object columns is fragile in pandas 3.0)
+    # datetime64 and object columns is fragile in pandas 3.0).
+    # CRITICAL: format='mixed' lets pandas infer per-row format. Without this,
+    # pandas picks ONE format from the first row and silently fails on others —
+    # e.g. '2024-06-29 00:00:00' wins, then '2026-12-31' becomes NaT.
     df["quarter_end_date"] = df["quarter_end_date"].astype(str)
-    df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    df["quarter_end_date"] = pd.to_datetime(
+        df["quarter_end_date"], errors="coerce", format="mixed"
+    ).dt.strftime("%Y-%m-%d")
     # Drop rows where the date couldn't be parsed
     df = df.dropna(subset=["quarter_end_date"])
     df = df[WEIGHT_COLS].drop_duplicates(subset=["ticker", "quarter_end_date", "segment"], keep="last")
