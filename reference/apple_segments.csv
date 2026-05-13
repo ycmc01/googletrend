@@ -1,6 +1,6 @@
 segment_name,trends_topic_id,trends_keywords,exclude_terms,notes
-iPhone,/m/04ck9_,"iPhone 15|iPhone 16|iPhone 17","iphone case|iphone repair|iphone unlock","Topic /m/04ck9_ is Apple's iPhone product line. Verify on trends.google.com by typing iPhone and checking the URL when you select the topic chip."
-Mac,/m/0czfx,"MacBook Pro|MacBook Air|M3 chip|M4 chip","macbook charger|macbook case",""
-iPad,/m/0cw94,"iPad Pro|iPad Air|iPad mini","ipad case|ipad screen protector",""
-Wearables,,"Apple Watch|AirPods|Vision Pro","apple watch band|airpods case","No clean unified topic; aggregate keywords"
-Services,,"Apple TV+|Apple Music|iCloud storage|App Store","apple tv remote|apple tv 4k","Services revenue bundle"
+iPhone,,"iPhone|iPhone 16|iPhone 17","iphone case|iphone repair|iphone unlock","Optional: replace topic_id with the verified Topic ID for Apple's iPhone product. Find by typing 'iPhone' on trends.google.com, picking the 'Product' or 'Topic' chip, then reading the URL parameter q=/m/xxxxx"
+Mac,,"MacBook|MacBook Pro|MacBook Air|M3 chip|M4 chip","macbook charger|macbook case",""
+iPad,,"iPad|iPad Pro|iPad Air|iPad mini","ipad case|ipad screen protector",""
+Wearables,,"Apple Watch|AirPods|Vision Pro","apple watch band|airpods case","Aggregated keyword-based (no single topic covers all wearables)"
+Services,,"Apple TV+|Apple Music|iCloud","apple tv remote|apple tv 4k","Services revenue bundle"
