@@ -49,13 +49,18 @@ def save_segments(df: pd.DataFrame) -> None:
 def load_weights(ticker: str | None = None) -> pd.DataFrame:
     if not REVENUE_WEIGHTS_CSV.exists():
         return pd.DataFrame(columns=WEIGHT_COLS)
-    df = pd.read_csv(REVENUE_WEIGHTS_CSV, parse_dates=["quarter_end_date"])
+    df = pd.read_csv(REVENUE_WEIGHTS_CSV, dtype={"ticker": str})
+    # robust parse: handles both '2024-06-29' and '2024-06-29 00:00:00'
+    df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce")
     if ticker is not None:
-        df = df[df["ticker"].str.upper() == ticker.upper()].reset_index(drop=True)
+        df = df[df["ticker"].astype(str).str.upper() == ticker.upper()].reset_index(drop=True)
     return df
 
 
 def save_weights(df: pd.DataFrame) -> None:
+    df = df.copy()
+    # canonical date format YYYY-MM-DD (no time component)
+    df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce").dt.strftime("%Y-%m-%d")
     df = df[WEIGHT_COLS].drop_duplicates(subset=["ticker", "quarter_end_date", "segment"], keep="last")
     df = df.sort_values(["ticker", "quarter_end_date", "segment"]).reset_index(drop=True)
     df.to_csv(REVENUE_WEIGHTS_CSV, index=False)
