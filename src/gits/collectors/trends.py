@@ -13,9 +13,25 @@ import time
 from pathlib import Path
 
 import pandas as pd
-from pytrends.request import TrendReq
 from rich.console import Console
 from tenacity import retry, stop_after_attempt, wait_exponential
+from urllib3.util.retry import Retry as _Retry
+
+
+class _PatchedRetry(_Retry):
+    """pytrends 4.9.2 passes `method_whitelist` which urllib3>=2 renamed to `allowed_methods`."""
+
+    def __init__(self, *args, **kwargs):
+        if "method_whitelist" in kwargs:
+            kwargs.setdefault("allowed_methods", kwargs.pop("method_whitelist"))
+        super().__init__(*args, **kwargs)
+
+
+import pytrends.request as _pr  # noqa: E402
+
+_pr.Retry = _PatchedRetry
+
+from pytrends.request import TrendReq  # noqa: E402
 
 console = Console()
 
@@ -47,19 +63,22 @@ def fetch_cross_segment_trends(
     segments_df: pd.DataFrame,
     timeframe: str = "today 5-y",
     geo: str = "",
+    ticker: str | None = None,
 ) -> pd.DataFrame:
     """Fetch RSV for all segments in ONE query → cross-comparable scale.
 
-    Returns long-format DataFrame: [date, segment, rsv]
+    Returns long-format DataFrame: [ticker, date, segment, rsv, geo, timeframe]
     """
     if len(segments_df) > 5:
         raise ValueError(
             f"pytrends accepts max 5 terms per query; got {len(segments_df)} segments. "
             "Split into multiple queries with a shared anchor for calibration."
         )
+    if ticker is None and "ticker" in segments_df.columns and segments_df["ticker"].nunique() == 1:
+        ticker = segments_df["ticker"].iloc[0]
 
     queries = [_segment_to_query(row) for _, row in segments_df.iterrows()]
-    console.print(f"[cyan]Fetching cross-segment trends ({geo or 'WW'}, {timeframe})[/cyan]")
+    console.print(f"[cyan]Fetching cross-segment trends for {ticker} ({geo or 'WW'}, {timeframe})[/cyan]")
     console.print(f"  Queries: {queries}")
 
     pytrends = TrendReq(**PYTRENDS_KWARGS)
@@ -74,9 +93,9 @@ def fetch_cross_segment_trends(
     long_df = (
         df.reset_index()
         .melt(id_vars="date", var_name="segment", value_name="rsv")
-        .assign(geo=geo or "WW", timeframe=timeframe)
+        .assign(ticker=(ticker or "").upper(), geo=geo or "WW", timeframe=timeframe)
     )
-    return long_df
+    return long_df[["ticker", "date", "segment", "rsv", "geo", "timeframe"]]
 
 
 def fetch_segment_drilldown(

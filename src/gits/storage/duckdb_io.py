@@ -1,7 +1,7 @@
 """DuckDB storage layer.
 
-Pattern: parquet files in data/raw/ are source of truth; DuckDB acts as
-the query engine and stores processed/aggregated tables.
+All tables include a `ticker` column so the same DB can hold multi-company data.
+Parquet files in data/raw/ are source of truth; DuckDB is the query engine.
 """
 from __future__ import annotations
 
@@ -21,12 +21,13 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS trends (
+            ticker       VARCHAR,
             date         DATE,
             segment      VARCHAR,
             rsv          DOUBLE,
             geo          VARCHAR,
             timeframe    VARCHAR,
-            PRIMARY KEY (date, segment, geo, timeframe)
+            PRIMARY KEY (ticker, date, segment, geo, timeframe)
         );
         CREATE TABLE IF NOT EXISTS prices (
             date         DATE,
@@ -40,17 +41,18 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
             PRIMARY KEY (date, ticker)
         );
         CREATE TABLE IF NOT EXISTS segment_weights (
+            ticker               VARCHAR,
             quarter_end          DATE,
             segment              VARCHAR,
             revenue_usd_m        DOUBLE,
             weight_pct           DOUBLE,
-            PRIMARY KEY (quarter_end, segment)
+            PRIMARY KEY (ticker, quarter_end, segment)
         );
         CREATE TABLE IF NOT EXISTS quarterly_revenue (
-            quarter_end           DATE,
             ticker                VARCHAR,
+            quarter_end           DATE,
             total_revenue_usd_m   DOUBLE,
-            PRIMARY KEY (quarter_end, ticker)
+            PRIMARY KEY (ticker, quarter_end)
         );
         """
     )
@@ -69,7 +71,7 @@ def _upsert(conn: duckdb.DuckDBPyConnection, table: str, df: pd.DataFrame, key_c
 
 
 def upsert_trends(conn, df: pd.DataFrame) -> int:
-    return _upsert(conn, "trends", df, ["date", "segment", "geo", "timeframe"])
+    return _upsert(conn, "trends", df, ["ticker", "date", "segment", "geo", "timeframe"])
 
 
 def upsert_prices(conn, df: pd.DataFrame) -> int:
@@ -77,44 +79,44 @@ def upsert_prices(conn, df: pd.DataFrame) -> int:
 
 
 def upsert_segment_weights(conn, df: pd.DataFrame) -> int:
-    return _upsert(conn, "segment_weights", df, ["quarter_end", "segment"])
+    return _upsert(conn, "segment_weights", df, ["ticker", "quarter_end", "segment"])
 
 
 def upsert_quarterly_revenue(conn, df: pd.DataFrame) -> int:
-    return _upsert(conn, "quarterly_revenue", df, ["quarter_end", "ticker"])
+    return _upsert(conn, "quarterly_revenue", df, ["ticker", "quarter_end"])
 
 
-def read_trends(conn, geo: str = "WW") -> pd.DataFrame:
+def read_trends(conn, ticker: str, geo: str = "WW") -> pd.DataFrame:
     return conn.execute(
-        "SELECT date, segment, rsv FROM trends WHERE geo = ? ORDER BY date, segment",
-        [geo],
+        "SELECT date, segment, rsv FROM trends WHERE ticker = ? AND geo = ? ORDER BY date, segment",
+        [ticker.upper(), geo],
     ).df()
 
 
-def read_prices(conn, ticker: str = "AAPL") -> pd.DataFrame:
+def read_prices(conn, ticker: str) -> pd.DataFrame:
     return conn.execute(
         "SELECT date, close, adj_close, volume FROM prices WHERE ticker = ? ORDER BY date",
-        [ticker],
+        [ticker.upper()],
     ).df()
 
 
-def read_segment_weights(conn) -> pd.DataFrame:
+def read_segment_weights(conn, ticker: str) -> pd.DataFrame:
     return conn.execute(
-        "SELECT quarter_end, segment, revenue_usd_m, weight_pct "
-        "FROM segment_weights ORDER BY quarter_end, segment"
+        "SELECT quarter_end, segment, revenue_usd_m, weight_pct FROM segment_weights "
+        "WHERE ticker = ? ORDER BY quarter_end, segment",
+        [ticker.upper()],
     ).df()
 
 
-def read_quarterly_revenue(conn, ticker: str = "AAPL") -> pd.DataFrame:
+def read_quarterly_revenue(conn, ticker: str) -> pd.DataFrame:
     return conn.execute(
         "SELECT quarter_end, total_revenue_usd_m FROM quarterly_revenue "
         "WHERE ticker = ? ORDER BY quarter_end",
-        [ticker],
+        [ticker.upper()],
     ).df()
 
 
 def load_raw_parquets(pattern: str) -> pd.DataFrame:
-    """Read all parquet files under data/raw matching pattern (e.g. 'trends_*')."""
     files = sorted(RAW_DIR.glob(f"{pattern}.parquet"))
     if not files:
         return pd.DataFrame()

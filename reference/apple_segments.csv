@@ -1,6 +1,0 @@
-segment_name,trends_topic_id,trends_keywords,exclude_terms,notes
-iPhone,,"iPhone|iPhone 16|iPhone 17","iphone case|iphone repair|iphone unlock","Optional: replace topic_id with the verified Topic ID for Apple's iPhone product. Find by typing 'iPhone' on trends.google.com, picking the 'Product' or 'Topic' chip, then reading the URL parameter q=/m/xxxxx"
-Mac,,"MacBook|MacBook Pro|MacBook Air|M3 chip|M4 chip","macbook charger|macbook case",""
-iPad,,"iPad|iPad Pro|iPad Air|iPad mini","ipad case|ipad screen protector",""
-Wearables,,"Apple Watch|AirPods|Vision Pro","apple watch band|airpods case","Aggregated keyword-based (no single topic covers all wearables)"
-Services,,"Apple TV+|Apple Music|iCloud","apple tv remote|apple tv 4k","Services revenue bundle"

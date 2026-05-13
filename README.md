@@ -1,56 +1,121 @@
-# GITS Scanner — Apple PoC
+# GITS Scanner
 
-Global Intent Leading Indicator Scanner. Revenue-weighted Google Trends index for predicting Apple's quarterly segment revenue and stock price.
+Revenue-weighted Google Trends index for **nowcasting** any public company's quarterly results.
 
-## Quickstart
+**Reframe**: this is a nowcasting tool, not a leading-indicator tool. Quarterly earnings are released 30-45 days after the quarter end, so a calendar-coincident GITS at quarter-end gives meaningful informational edge over the official 10-Q.
+
+## Productized workflow
+
+Everything is driven by one CLI (`scripts/gits.py`) and three reference CSVs.
+
+### 1. Register a company
 
 ```powershell
-# 1. Install dependencies (requires uv: https://github.com/astral-sh/uv)
-uv sync
-
-# 2. Fill in segment weights manually
-#    Open reference/apple_revenue_weights.csv
-#    Read reference/README_FILL_THIS_OUT.txt for instructions
-#    Fill in segment revenue (in USD millions) for each fiscal quarter
-#    Source: Apple 10-Q / 10-K filings (https://investor.apple.com/sec-filings/)
-
-# 3. Fetch trends data (Google Trends, no API key needed)
-uv run python scripts/fetch_trends.py --geo "" --timeframe "today 5-y"
-
-# 4. Fetch stock prices and quarterly revenue
-uv run python scripts/fetch_prices.py --ticker AAPL --start 2020-01-01
-
-# 5. Compute GITS index
-uv run python scripts/compute_gits.py --geo WW
-
-# 6. Open the PoC notebook
-uv run jupyter notebook notebooks/01_apple_poc.ipynb
+.\.venv\Scripts\Activate.ps1
+python scripts/gits.py company add NVDA "Nvidia Corp" --fy-end-month 1
+python scripts/gits.py company list
 ```
 
-## Project structure
+### 2. Define segment keyword groups (the key-in tool)
+
+```powershell
+python scripts/gits.py segment add NVDA
+```
+
+Interactive prompts walk you through:
+- segment name (e.g. `Data Center`)
+- positive keywords (one per line, blank line to finish)
+- exclude terms
+- optional Topic ID (from `trends.google.com` URL after clicking a chip)
+- notes
+
+Limit: **5 segments per ticker** (pytrends single-query cap for cross-segment calibration).
+
+Other segment commands:
+```powershell
+python scripts/gits.py segment list NVDA
+python scripts/gits.py segment show NVDA "Data Center"
+python scripts/gits.py segment remove NVDA "Data Center"
+```
+
+### 3. Fill in revenue weights
+
+Edit `reference/revenue_weights.csv` directly, or import from a prepared CSV:
+
+```powershell
+python scripts/gits.py weight import NVDA --csv my_nvda_revenue.csv
+python scripts/gits.py weight list NVDA
+```
+
+Source: each company's 10-Q / 10-K segment disclosure. Required columns:
+
+```
+ticker,fiscal_quarter,quarter_end_date,segment,revenue_usd_m,total_revenue_usd_m,source_filing
+```
+
+Aim for **at least 16 fiscal quarters** (4 years) for usable statistical power; 8 is the bare minimum.
+
+### 4. Fetch raw data
+
+```powershell
+python scripts/gits.py fetch prices NVDA --start 2021-01-01
+python scripts/gits.py fetch trends NVDA --timeframe "today 5-y"
+```
+
+### 5. Compute the GITS index
+
+```powershell
+python scripts/gits.py compute NVDA
+```
+
+### 6. Generate the full HTML report
+
+```powershell
+python scripts/gits.py report NVDA
+```
+
+Produces `notebooks/report_NVDA.html` with three-axis charts, segment contribution, QoQ + deseasonalized lead-lag analyses.
+
+## Architecture
 
 ```
 gits-scanner/
+├── reference/
+│   ├── companies.csv         (ticker, name, fy_end_month, notes)
+│   ├── segments.csv          (ticker, segment_name, keywords, excludes, ...)
+│   └── revenue_weights.csv   (ticker, fiscal_q, q_end_date, segment, revenue, total)
 ├── src/gits/
-│   ├── config.py              Paths and defaults
-│   ├── collectors/            pytrends + yfinance wrappers
-│   ├── storage/               DuckDB I/O
-│   ├── engine/                RSV normalize + revenue weighting
-│   └── analysis/              Lead-lag backtest + plotly charts
-├── reference/                 Manually-filled CSVs (segment definitions + weights)
-├── scripts/                   CLI entry points
-├── notebooks/01_apple_poc.ipynb  Main PoC analysis
-└── data/                      Auto-generated parquet + duckdb (gitignored)
+│   ├── cli.py                Unified CLI (company / segment / weight / fetch / compute / report)
+│   ├── reference.py          Read/write helpers for the 3 CSVs
+│   ├── collectors/           pytrends + yfinance wrappers
+│   ├── storage/duckdb_io.py  Multi-ticker DuckDB schema
+│   ├── engine/               RSV normalize + revenue weighting
+│   └── analysis/             Lead-lag backtest + deseasonalization + plotly charts
+├── scripts/
+│   ├── gits.py               CLI entry point
+│   └── _smoke_test.py        Optional health check
+├── notebooks/01_poc_template.ipynb  Generic, reads GITS_TICKER from env
+└── data/                     Auto-generated parquet + duckdb (gitignored)
 ```
 
-## PoC verdict criteria
+## Setup (one time)
 
-The PoC is **Go** if, at lead = 1 or 2 quarters, `pearson_r > 0.5` and `p_value < 0.05` for GITS YoY vs Apple total-revenue YoY.
+```powershell
+# Python 3.11+ recommended (3.14 also works)
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e .
+pip install --group dev    # jupyter, ipykernel, ruff
+```
 
-If the verdict is **No-Go**, the entire thesis is suspect — stop here, do not extend to Tesla / Nvidia.
+## Known limitations
 
-## Known limitations (MVP)
+- **Cross-segment RSV scale**: works with ≤5 segments per ticker (pytrends single-query limit). For >5 segments, you need a calibration anchor and we don't yet support that automatically.
+- **Statistical power**: at 8 quarters, lead-lag correlations have wide CIs. Recommend ≥16 quarters before drawing thesis conclusions.
+- **pytrends rate limits**: 429s happen. The `urllib3 v2 method_whitelist` bug is monkey-patched in `trends.py`.
+- **iPhone-style dominance**: the highest-volume segment dominates the unweighted RSV scale. The PRD's "absolute pageview conversion" stage (Ahrefs/SEMrush) would solve this but costs ~$500/month and is deferred.
 
-- Google Trends RSV is relative, not absolute. Cross-segment magnitudes are calibrated by fitting all 5 segments into ONE pytrends query (max 5 keywords); accurate for Apple but does not generalize beyond 5 segments without a calibration anchor.
-- `pytrends` is unofficial and rate-limits aggressively. If you hit 429s, wait an hour or switch to SerpAPI / DataForSEO.
-- Segment revenue weights must be filled manually for now. Phase 2 will automate via SEC EDGAR XBRL parsing.
+## License
+
+Personal / research use.

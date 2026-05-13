@@ -20,6 +20,10 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
+# Generated reports
+notebooks/report_*.html
+notebooks/*_executed.ipynb
+
 # Env
 .env
 .env.local

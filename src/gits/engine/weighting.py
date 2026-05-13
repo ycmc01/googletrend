@@ -10,32 +10,40 @@ from __future__ import annotations
 
 import pandas as pd
 
-SEGMENT_COLS = ["iPhone", "Mac", "iPad", "Wearables", "Services"]
+from gits.reference import load_weights
 
 
-def load_weights_from_csv(csv_path) -> pd.DataFrame:
-    """Read apple_revenue_weights.csv and compute weight_pct per segment.
+def load_weights_long(ticker: str) -> pd.DataFrame:
+    """Read revenue_weights.csv (filtered to ticker) and add weight_pct column.
 
     Returns long format: [quarter_end, segment, revenue_usd_m, weight_pct]
-    Rows where all segment values are missing are dropped.
+    Rows missing revenue are dropped.
     """
-    df = pd.read_csv(csv_path, parse_dates=["quarter_end_date"])
+    df = load_weights(ticker=ticker).dropna(subset=["revenue_usd_m"]).copy()
+    if df.empty:
+        return pd.DataFrame(columns=["quarter_end", "segment", "revenue_usd_m", "weight_pct"])
+
     df = df.rename(columns={"quarter_end_date": "quarter_end"})
+    totals = df.groupby("quarter_end")["revenue_usd_m"].transform("sum")
+    df["weight_pct"] = df["revenue_usd_m"] / totals
+    df["quarter_end"] = pd.to_datetime(df["quarter_end"])
+    return df[["quarter_end", "segment", "revenue_usd_m", "weight_pct"]].sort_values(
+        ["quarter_end", "segment"]
+    ).reset_index(drop=True)
 
-    available_segments = [c for c in SEGMENT_COLS if c in df.columns]
-    df = df.dropna(subset=available_segments, how="all").reset_index(drop=True)
 
-    long = df.melt(
-        id_vars=["quarter_end"],
-        value_vars=available_segments,
-        var_name="segment",
-        value_name="revenue_usd_m",
-    ).dropna(subset=["revenue_usd_m"])
-
-    totals = long.groupby("quarter_end")["revenue_usd_m"].transform("sum")
-    long["weight_pct"] = long["revenue_usd_m"] / totals
-    long["quarter_end"] = pd.to_datetime(long["quarter_end"])
-    return long.sort_values(["quarter_end", "segment"]).reset_index(drop=True)
+def load_total_revenue(ticker: str) -> pd.Series:
+    """Total revenue per fiscal quarter, indexed by quarter_end_date."""
+    df = load_weights(ticker=ticker).dropna(subset=["total_revenue_usd_m"])
+    if df.empty:
+        return pd.Series(dtype=float, name="total_revenue_usd_m")
+    series = (
+        df.drop_duplicates("quarter_end_date")
+        .set_index("quarter_end_date")["total_revenue_usd_m"]
+        .sort_index()
+    )
+    series.index = pd.to_datetime(series.index)
+    return series
 
 
 def forward_fill_weights(weights_long: pd.DataFrame, target_dates: pd.DatetimeIndex) -> pd.DataFrame:
@@ -46,7 +54,7 @@ def forward_fill_weights(weights_long: pd.DataFrame, target_dates: pd.DatetimeIn
     """
     wide = weights_long.pivot(index="quarter_end", columns="segment", values="weight_pct").sort_index()
     target_dates = pd.DatetimeIndex(target_dates).sort_values()
-    aligned = wide.reindex(target_dates.union(wide.index), method=None).sort_index().ffill()
+    aligned = wide.reindex(target_dates.union(wide.index)).sort_index().ffill()
     return aligned.reindex(target_dates)
 
 
@@ -59,14 +67,12 @@ def compute_gits_index(
 
     Args:
         segment_traffic_wide: index = date, columns = segments, values = RSV (or pageview)
-        weights_long: output of load_weights_from_csv
-        new_product_weights: optional {segment_name: assumed_weight_pct} for unreleased products
-            applied to dates >= earliest_release_date (currently applied throughout for simplicity)
+        weights_long: output of load_weights_long
+        new_product_weights: optional {segment_name: assumed_weight_pct}
 
     Returns:
-        DataFrame indexed by date with columns:
-          - one column per segment (weighted contribution)
-          - 'gits' (sum across segments)
+        DataFrame indexed by date with one column per segment (weighted contribution)
+        plus a 'gits' column (sum across segments).
     """
     traffic = segment_traffic_wide.copy()
     traffic.index = pd.to_datetime(traffic.index)
