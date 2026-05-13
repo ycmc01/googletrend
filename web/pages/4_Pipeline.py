@@ -29,11 +29,26 @@ st.divider()
 # Step 1: Trends
 st.subheader("Step 1 · Fetch Google Trends")
 c1, c2 = st.columns([1, 1])
-geo = c1.text_input("Geography", value="", help="Empty = worldwide; 'TW' for Taiwan-only; 'US' for US-only")
-timeframe = c2.text_input("Timeframe", value="today 5-y")
+GEO_OPTIONS = {
+    "Worldwide": "",
+    "Taiwan (TW)": "TW",
+    "United States (US)": "US",
+    "Japan (JP)": "JP",
+    "Hong Kong (HK)": "HK",
+    "Korea (KR)": "KR",
+    "Mainland China (CN)": "CN",
+    "Singapore (SG)": "SG",
+    "United Kingdom (GB)": "GB",
+}
+geo_label = c1.selectbox("Geography", list(GEO_OPTIONS.keys()), index=0)
+geo = GEO_OPTIONS[geo_label]
+timeframe = c2.text_input("Timeframe", value="today 5-y", help="e.g. 'today 5-y', 'today 12-m', '2020-01-01 2025-12-31'")
 if st.button("🌐 Fetch trends", type="primary"):
     with st.spinner("Calling pytrends…"):
-        rc, out, err = run_cli("fetch", "trends", ticker, "--geo", geo, "--timeframe", timeframe)
+        cli_args = ["fetch", "trends", ticker, "--timeframe", timeframe]
+        if geo:
+            cli_args.extend(["--geo", geo])
+        rc, out, err = run_cli(*cli_args)
     if rc == 0:
         st.success("Trends fetched")
     else:
@@ -59,10 +74,12 @@ st.divider()
 
 # Step 3: Compute
 st.subheader("Step 3 · Compute GITS index")
-geo2 = st.text_input("Geography for compute", value=(geo or "WW"))
+# DuckDB stores geo as 'WW' for worldwide
+geo_for_compute = geo if geo else "WW"
+st.caption(f"Will read trends with geo = `{geo_for_compute}` (matches Step 1 selection)")
 if st.button("🧮 Compute GITS", type="primary"):
     with st.spinner("Computing weighted index…"):
-        rc, out, err = run_cli("compute", ticker, "--geo", geo2)
+        rc, out, err = run_cli("compute", ticker, "--geo", geo_for_compute)
     if rc == 0:
         st.success("GITS computed")
     else:

@@ -59,6 +59,16 @@ def _build_and_fetch(pytrends: TrendReq, kw_list: list[str], timeframe: str, geo
     return df
 
 
+def _normalize_geo(geo: str) -> str:
+    """Map common worldwide aliases to empty string (Google Trends' worldwide code)."""
+    if not geo:
+        return ""
+    g = geo.strip().upper()
+    if g in {"WW", "WORLD", "WORLDWIDE", "GLOBAL", "ALL"}:
+        return ""
+    return g
+
+
 def fetch_cross_segment_trends(
     segments_df: pd.DataFrame,
     timeframe: str = "today 5-y",
@@ -77,6 +87,7 @@ def fetch_cross_segment_trends(
     if ticker is None and "ticker" in segments_df.columns and segments_df["ticker"].nunique() == 1:
         ticker = segments_df["ticker"].iloc[0]
 
+    geo = _normalize_geo(geo)
     queries = [_segment_to_query(row) for _, row in segments_df.iterrows()]
     console.print(f"[cyan]Fetching cross-segment trends for {ticker} ({geo or 'WW'}, {timeframe})[/cyan]")
     console.print(f"  Queries: {queries}")
