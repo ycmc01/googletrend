@@ -1,6 +1,6 @@
 # GITS Scanner
 
-Revenue-weighted Google Trends index for **nowcasting** any public company's quarterly results. Works for **Taiwan and US stocks** — Taiwan data auto-imported from XQAPI, US data via yfinance.
+Revenue-weighted Google Trends index for **nowcasting** any public company's quarterly results. Works for **Taiwan and US stocks** — both revenue and stock prices auto-imported from XQAPI.
 
 **Reframe**: this is a nowcasting tool, not a leading-indicator tool. Quarterly earnings are released 30-45 days after the quarter end, so a calendar-coincident GITS at quarter-end gives meaningful informational edge over the official 10-Q.
 
@@ -103,7 +103,8 @@ gits-scanner/
 ├── src/gits/
 │   ├── cli.py                Unified CLI (company / segment / weight / fetch / compute / report)
 │   ├── reference.py          Read/write helpers for the 3 CSVs
-│   ├── collectors/           pytrends + yfinance wrappers
+│   ├── collectors/           pytrends (trends) + XQAPI K-line (prices) wrappers
+│   ├── xqapi.py              Sysjust XQ API REST client (basic info + revenue + K-line)
 │   ├── storage/duckdb_io.py  Multi-ticker DuckDB schema
 │   ├── engine/               RSV normalize + revenue weighting
 │   └── analysis/             Lead-lag backtest + deseasonalization + plotly charts

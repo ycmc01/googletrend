@@ -44,10 +44,11 @@ st.divider()
 
 # Step 2: Prices
 st.subheader("Step 2 · Fetch stock prices")
-start = st.text_input("Start date", value="2021-01-01")
+count = st.number_input("Daily bars to fetch", min_value=100, max_value=5000, value=1500, step=100,
+                        help="XQAPI K-line: 1500 bars ≈ 6 years for TW (3y for US, fewer trading days)")
 if st.button("💹 Fetch prices", type="primary"):
-    with st.spinner("Calling yfinance…"):
-        rc, out, err = run_cli("fetch", "prices", ticker, "--start", start)
+    with st.spinner("Calling XQAPI K-line…"):
+        rc, out, err = run_cli("fetch", "prices", ticker, "--count", str(count))
     if rc == 0:
         st.success("Prices fetched")
     else:

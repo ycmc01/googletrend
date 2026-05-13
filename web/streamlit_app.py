@@ -59,7 +59,7 @@ st.subheader("Workflow")
 st.markdown("""
 1. **🏢 Companies** — Register a new ticker. For Taiwan stocks (e.g. `2330`) the form auto-fills the company name via XQAPI.
 2. **🏷 Segments** — Define keyword groups for each business unit. Default for TW stocks is a single `Total` segment using the company name; replace with finer breakdowns if data is available.
-3. **💰 Weights** — Import quarterly revenue from XQAPI (TW) or yfinance (US), or paste manually.
+3. **💰 Weights** — Import quarterly revenue from XQAPI, or paste manually for segments not covered.
 4. **⚙ Pipeline** — Run `fetch trends / fetch prices / compute` for the chosen ticker.
 5. **📈 Report** — View the nowcasting analysis with interactive charts.
 """)
@@ -68,5 +68,5 @@ with st.sidebar:
     st.markdown("### About")
     st.caption(
         "Project root: `" + str(PROJECT_ROOT) + "`\n\n"
-        "Data sources: Google Trends (pytrends), yfinance, XQAPI (台股), DuckDB"
+        "Data sources: Google Trends (pytrends), XQAPI (prices + revenue), DuckDB"
     )

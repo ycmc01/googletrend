@@ -328,21 +328,18 @@ def cmd_fetch_trends(args) -> int:
 
 
 def cmd_fetch_prices(args) -> int:
-    from gits.collectors.prices import fetch_prices, fetch_quarterly_financials, save_parquet
+    from gits.collectors.prices import fetch_prices, save_parquet
     from gits.config import RAW_DIR
-    from gits.storage.duckdb_io import get_conn, init_schema, upsert_prices, upsert_quarterly_revenue
+    from gits.storage.duckdb_io import get_conn, init_schema, upsert_prices
 
     ticker = args.ticker.upper()
-    prices = fetch_prices(ticker, start=args.start)
+    prices = fetch_prices(ticker, count=int(args.count))
     save_parquet(prices, RAW_DIR, f"prices_{ticker}")
-    qf = fetch_quarterly_financials(ticker)
-    save_parquet(qf, RAW_DIR, f"quarterly_rev_{ticker}")
 
     with get_conn() as conn:
         init_schema(conn)
         upsert_prices(conn, prices)
-        upsert_quarterly_revenue(conn, qf)
-    console.print(f"[green]OK[/green] {ticker}: {len(prices)} price rows, {len(qf)} quarterly rev rows persisted")
+    console.print(f"[green]OK[/green] {ticker}: {len(prices)} price rows persisted")
     return 0
 
 
@@ -456,7 +453,7 @@ def build_parser() -> argparse.ArgumentParser:
     pf = sub.add_parser("fetch", help="Fetch raw data")
     pfs = pf.add_subparsers(dest="action", required=True)
     pft = pfs.add_parser("trends"); pft.add_argument("ticker"); pft.add_argument("--geo", default=""); pft.add_argument("--timeframe", default="today 5-y"); pft.set_defaults(func=cmd_fetch_trends)
-    pfp = pfs.add_parser("prices"); pfp.add_argument("ticker"); pfp.add_argument("--start", default="2020-01-01"); pfp.set_defaults(func=cmd_fetch_prices)
+    pfp = pfs.add_parser("prices"); pfp.add_argument("ticker"); pfp.add_argument("--count", type=int, default=1500, help="Number of daily bars to fetch (XQAPI)"); pfp.set_defaults(func=cmd_fetch_prices)
 
     # compute
     pco = sub.add_parser("compute"); pco.add_argument("ticker"); pco.add_argument("--geo", default="WW"); pco.set_defaults(func=cmd_compute)

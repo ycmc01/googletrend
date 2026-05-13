@@ -5,7 +5,6 @@ description = "Global Intent Leading Indicator Scanner - Apple PoC"
 requires-python = ">=3.11"
 dependencies = [
     "pytrends>=4.9.2",
-    "yfinance>=0.2.40",
     "duckdb>=1.0.0",
     "pandas>=2.2.0",
     "plotly>=5.20.0",
