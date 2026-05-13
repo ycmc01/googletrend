@@ -24,9 +24,12 @@ def load_weights_long(ticker: str) -> pd.DataFrame:
         return pd.DataFrame(columns=["quarter_end", "segment", "revenue_usd_m", "weight_pct"])
 
     df = df.rename(columns={"quarter_end_date": "quarter_end"})
+    df["quarter_end"] = pd.to_datetime(df["quarter_end"], errors="coerce")
+    df = df.dropna(subset=["quarter_end"])
+    if df.empty:
+        return pd.DataFrame(columns=["quarter_end", "segment", "revenue_usd_m", "weight_pct"])
     totals = df.groupby("quarter_end")["revenue_usd_m"].transform("sum")
     df["weight_pct"] = df["revenue_usd_m"] / totals
-    df["quarter_end"] = pd.to_datetime(df["quarter_end"])
     return df[["quarter_end", "segment", "revenue_usd_m", "weight_pct"]].sort_values(
         ["quarter_end", "segment"]
     ).reset_index(drop=True)

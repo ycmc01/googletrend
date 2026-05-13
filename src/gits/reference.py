@@ -63,8 +63,12 @@ def load_weights(ticker: str | None = None) -> pd.DataFrame:
 
 def save_weights(df: pd.DataFrame) -> None:
     df = df.copy()
-    # canonical date format YYYY-MM-DD (no time component)
+    # Cast to string first so pd.to_datetime sees a uniform input (concat between
+    # datetime64 and object columns is fragile in pandas 3.0)
+    df["quarter_end_date"] = df["quarter_end_date"].astype(str)
     df["quarter_end_date"] = pd.to_datetime(df["quarter_end_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    # Drop rows where the date couldn't be parsed
+    df = df.dropna(subset=["quarter_end_date"])
     df = df[WEIGHT_COLS].drop_duplicates(subset=["ticker", "quarter_end_date", "segment"], keep="last")
     df = df.sort_values(["ticker", "quarter_end_date", "segment"]).reset_index(drop=True)
     df.to_csv(REVENUE_WEIGHTS_CSV, index=False)

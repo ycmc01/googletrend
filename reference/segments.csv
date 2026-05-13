@@ -1,10 +1,6 @@
 ticker,segment_name,trends_topic_id,trends_keywords,exclude_terms,notes
 2330,AI,,AI|LLM|AI Agent,,
-AAPL,Mac,,MacBook|MacBook Pro|MacBook Air|M3 chip|M4 chip,macbook charger|macbook case,
-AAPL,Services,,Apple TV+|Apple Music|iCloud,apple tv remote|apple tv 4k,Services revenue bundle
-AAPL,Wearables,,Apple Watch|AirPods|Vision Pro,apple watch band|airpods case,Aggregated keyword-based
-AAPL,iPad,,iPad|iPad Pro|iPad Air|iPad mini,ipad case|ipad screen protector,
-AAPL,iPhone,,iPhone|iPhone 16|iPhone 17,iphone case|iphone repair|iphone unlock,Optional: replace topic_id with verified Topic ID from trends.google.com URL
+AAPL,自訂組合,,iphone|ipad|iwatch|ipod|mac|macbook,,由一鍵分析建立
 NVDA,Automotive,,Nvidia Drive|Drive Orin|Drive Thor,,
 NVDA,Data Center,,Nvidia H100|Blackwell GPU|H200|GB200,nvidia driver|nvidia geforce experience,AI accelerator chips
 NVDA,Gaming,,GeForce RTX|RTX 5090|RTX 4090,geforce experience,Consumer GPU

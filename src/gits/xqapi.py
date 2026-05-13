@@ -131,31 +131,57 @@ def extract_field(payload: dict, c_name: str) -> list[tuple[str, float]]:
 
 
 def quarterly_revenue_to_rows(payload: dict, ticker: str) -> list[dict]:
-    """Convert financial-report Q response to revenue_weights row schema (Total segment)."""
+    """Convert financial-report Q response to revenue_weights row schema.
+
+    Single 'Total' segment per quarter. Handles XQAPI's two quirks:
+      * Unit is per-market: TW returns '1000' (千元) → divide by 1000 to get millions.
+                            US returns '1000000' (millions) → no division.
+      * Date format is per-market: TW returns 'YYYYQn', US returns 'YYYY/Qn'.
+    """
     fields_iter = payload.get("financial-report", payload)
-    raw_pairs = extract_field(
-        {"_": fields_iter} if "fields" in fields_iter else fields_iter,
-        "營業收入淨額",
-    )
-    if not raw_pairs:
-        raw_pairs = extract_field(
-            {"_": fields_iter} if "fields" in fields_iter else fields_iter,
-            "營業收入",
-        )
+    nodes = fields_iter.get("fields", []) if "fields" in fields_iter else []
+    target = None
+    for f in nodes:
+        if f.get("cName") in ("營業收入淨額", "營業收入"):
+            target = f
+            break
+    if target is None:
+        return []
+
+    unit = str(target.get("unit", "")).strip()
+    if unit in ("1000", "千元"):
+        divisor = 1000.0
+    elif unit in ("1000000", "百萬"):
+        divisor = 1.0
+    else:
+        divisor = 1000.0  # conservative default for unknown units
 
     bare = norm_ticker(ticker).split(".", 1)[0]
     rows = []
-    for date_str, val in raw_pairs:
-        if "Q" in date_str:
+    for v in target.get("values", []):
+        date_str = str(v.get("date", "")).replace("/", "")  # '2026/Q2' → '2026Q2'
+        try:
+            raw = float(str(v["value"]).replace(",", ""))
+        except (ValueError, KeyError, TypeError):
+            continue
+        if "Q" not in date_str:
+            continue
+        try:
             year, qn = date_str.split("Q")
-            mm_dd = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}[int(qn)]
-            rows.append({
-                "ticker": bare,
-                "fiscal_quarter": f"Q{qn} FY{year}",
-                "quarter_end_date": f"{year}-{mm_dd}",
-                "segment": "Total",
-                "revenue_usd_m": val / 1000,
-                "total_revenue_usd_m": val / 1000,
-                "source_filing": "XQAPI financial-report Q",
-            })
+            qn_int = int(qn)
+        except (ValueError, IndexError):
+            continue
+        mm_dd = {1: "03-31", 2: "06-30", 3: "09-30", 4: "12-31"}.get(qn_int)
+        if not mm_dd:
+            continue
+        revenue_m = raw / divisor
+        rows.append({
+            "ticker": bare,
+            "fiscal_quarter": f"Q{qn} FY{year}",
+            "quarter_end_date": f"{year}-{mm_dd}",
+            "segment": "Total",
+            "revenue_usd_m": revenue_m,
+            "total_revenue_usd_m": revenue_m,
+            "source_filing": "XQAPI financial-report Q",
+        })
     return rows

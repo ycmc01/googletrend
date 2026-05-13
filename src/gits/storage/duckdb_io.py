@@ -61,6 +61,10 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
 def _upsert(conn: duckdb.DuckDBPyConnection, table: str, df: pd.DataFrame, key_cols: list[str]) -> int:
     if df.empty:
         return 0
+    # Drop rows where any primary-key column is NULL/NaT — DuckDB rejects them
+    df = df.dropna(subset=key_cols)
+    if df.empty:
+        return 0
     conn.register("_stage", df)
     cols = ", ".join(df.columns)
     where = " AND ".join([f"t.{k} = s.{k}" for k in key_cols])
