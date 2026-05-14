@@ -119,5 +119,7 @@ def compute_gits_index(
                 common_segments.append(seg)
 
     contributions = traffic[common_segments].mul(weights_wide[common_segments], axis=0)
-    contributions["gits"] = contributions.sum(axis=1)
+    # min_count=1 → 整列都是 NaN 時回 NaN（而非 0）。確保「沒有有效權重」的
+    # 早期日期在圖上是真實的 NaN（會被 dropna 過濾），而不是誤導性的 0。
+    contributions["gits"] = contributions.sum(axis=1, min_count=1)
     return contributions
