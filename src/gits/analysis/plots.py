@@ -30,7 +30,7 @@ def three_axis_chart(
     fig.add_trace(
         go.Scatter(
             x=price.index, y=price.values, name="股價",
-            line=dict(color="#ff7f0e", width=1), yaxis="y3",
+            line=dict(color="#ff7f0e", width=2), yaxis="y3",
         ),
     )
 
@@ -97,7 +97,7 @@ def weekly_gits_vs_price(gits_weekly: pd.Series, price_weekly: pd.Series, title:
     )
     fig.add_trace(
         go.Scatter(x=price_weekly.index, y=price_weekly.values,
-                   name="股價 (週收盤)", line=dict(color="#ff7f0e", width=2, dash="dash")),
+                   name="股價 (週收盤)", line=dict(color="#ff7f0e", width=2)),
         secondary_y=True,
     )
     fig.update_layout(
