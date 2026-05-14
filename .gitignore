@@ -24,10 +24,10 @@ venv/
 notebooks/report_*.html
 notebooks/*_executed.ipynb
 
-# Streamlit runtime
-data/streamlit.log
-data/streamlit.err
-data/streamlit.pid
+# Streamlit runtime + ad-hoc test outputs
+data/streamlit.*
+data/test.*
+data/bat_test.*
 
 # Env
 .env
