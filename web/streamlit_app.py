@@ -50,8 +50,8 @@ from gits.xqapi import (
     quarterly_revenue_to_rows,
 )
 
-st.set_page_config(page_title="GITS 一鍵分析", page_icon="🚀", layout="wide")
-st.title("🚀 GITS 一鍵分析")
+st.set_page_config(page_title="GITS分析", page_icon="🚀", layout="wide")
+st.title("🚀 GITS分析")
 st.caption("從清單選已有公司就會自動帶入關鍵字，按一次按鈕就能看到股價 vs 搜尋熱度週線圖。")
 
 GEO_OPTIONS = {
