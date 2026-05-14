@@ -1,8 +1,7 @@
-"""GITS Scanner — 一鍵分析（主入口）。
+"""GITS Scanner — 主入口。
 
-簡化流程：
-- 已有公司：從下拉選單挑 → 自動帶入既有關鍵字 → 按開始分析
-- 新公司：選「新增其他公司」→ 輸入代碼 + 關鍵字 → 按開始分析
+使用 st.navigation 自訂側邊欄頁面名稱（不靠檔名）。檔名維持 ASCII
+讓 .bat 啟動器不必處理 cp950 trail-byte 問題。
 """
 from __future__ import annotations
 
@@ -51,8 +50,7 @@ from gits.xqapi import (
 )
 
 st.set_page_config(page_title="GITS分析", page_icon="🚀", layout="wide")
-st.title("🚀 GITS分析")
-st.caption("從清單選已有公司就會自動帶入關鍵字，按一次按鈕就能看到股價 vs 搜尋熱度週線圖。")
+
 
 GEO_OPTIONS = {
     "台灣 (TW)": "TW",
@@ -127,76 +125,81 @@ def _save_revenue(bare_ticker: str) -> int:
     return len(rows)
 
 
-# -------- UI: 公司選擇 --------
+# -------- home page renderer --------
 
-companies_df = load_companies()
-existing_tickers = companies_df["ticker"].astype(str).tolist()
+def _render_home_page():
+    """一鍵分析主頁。"""
+    st.title("🚀 GITS分析")
+    st.caption("從清單選已有公司就會自動帶入關鍵字，按一次按鈕就能看到股價 vs 搜尋熱度週線圖。")
 
-ticker_choices = existing_tickers + [NEW_CHOICE] if existing_tickers else [NEW_CHOICE]
-selected = st.selectbox("公司", ticker_choices, index=0)
+    companies_df = load_companies()
+    existing_tickers = companies_df["ticker"].astype(str).tolist()
 
-if selected == NEW_CHOICE:
-    is_new = True
-    multi_segment_mode = False
-    cc1, cc2 = st.columns([1, 2])
-    new_ticker = cc1.text_input("股票代碼", placeholder="例：TSLA")
-    geo_label = cc2.selectbox("搜尋熱度區域", list(GEO_OPTIONS.keys()), index=0)
-    default_keywords = ""
-    ticker_for_run = new_ticker.strip()
-    company_display_name = ticker_for_run.upper() if ticker_for_run else None
-else:
-    is_new = False
-    ticker_for_run = selected
-    row = companies_df[companies_df["ticker"].astype(str) == selected].iloc[0]
-    company_display_name = row["name"]
+    ticker_choices = existing_tickers + [NEW_CHOICE] if existing_tickers else [NEW_CHOICE]
+    selected = st.selectbox("公司", ticker_choices, index=0)
 
-    cc1, cc2 = st.columns([1, 2])
-    cc1.markdown(f"**公司名稱**：{company_display_name}")
-    geo_label = cc2.selectbox("搜尋熱度區域", list(GEO_OPTIONS.keys()), index=0)
-
-    segs = load_segments(selected)
-    multi_segment_mode = len(segs) > 1
-
-    if multi_segment_mode:
-        st.success(f"**{selected} 已有 {len(segs)} 個 segment（將沿用既有設定，不會覆寫）：**")
-        seg_summary = pd.DataFrame({
-            "Segment": segs["segment_name"],
-            "關鍵字": segs["trends_keywords"].astype(str).str.replace("|", ", "),
-        })
-        st.dataframe(seg_summary, use_container_width=True, hide_index=True)
-        default_keywords = None
+    if selected == NEW_CHOICE:
+        is_new = True
+        multi_segment_mode = False
+        cc1, cc2 = st.columns([1, 2])
+        new_ticker = cc1.text_input("股票代碼", placeholder="例：TSLA")
+        geo_label = cc2.selectbox("搜尋熱度區域", list(GEO_OPTIONS.keys()), index=0)
+        default_keywords = ""
+        ticker_for_run = new_ticker.strip()
+        company_display_name = ticker_for_run.upper() if ticker_for_run else None
     else:
-        existing_kws = []
-        if not segs.empty:
-            for kw in str(segs.iloc[0]["trends_keywords"]).split("|"):
-                if kw.strip():
-                    existing_kws.append(kw.strip())
-        default_keywords = "\n".join(existing_kws)
+        is_new = False
+        ticker_for_run = selected
+        row = companies_df[companies_df["ticker"].astype(str) == selected].iloc[0]
+        company_display_name = row["name"]
 
-if not multi_segment_mode:
-    keywords_input = st.text_area(
-        "關鍵字組（每行一個）" + ("" if is_new else "　— 已載入既有設定，編輯後送出會覆寫"),
-        value=default_keywords or "",
-        placeholder="AI\nLLM\nAI Agent",
-        height=140,
-        help="這些關鍵字會在 Google Trends 中合併查詢，作為單一綜合搜尋熱度指標",
-    )
-else:
-    keywords_input = None
+        cc1, cc2 = st.columns([1, 2])
+        cc1.markdown(f"**公司名稱**：{company_display_name}")
+        geo_label = cc2.selectbox("搜尋熱度區域", list(GEO_OPTIONS.keys()), index=0)
 
-submit = st.button("🚀 開始分析", type="primary", use_container_width=True)
+        segs = load_segments(selected)
+        multi_segment_mode = len(segs) > 1
 
+        if multi_segment_mode:
+            st.success(f"**{selected} 已有 {len(segs)} 個 segment（將沿用既有設定，不會覆寫）：**")
+            seg_summary = pd.DataFrame({
+                "Segment": segs["segment_name"],
+                "關鍵字": segs["trends_keywords"].astype(str).str.replace("|", ", "),
+            })
+            st.dataframe(seg_summary, use_container_width=True, hide_index=True)
+            default_keywords = None
+        else:
+            existing_kws = []
+            if not segs.empty:
+                for kw in str(segs.iloc[0]["trends_keywords"]).split("|"):
+                    if kw.strip():
+                        existing_kws.append(kw.strip())
+            default_keywords = "\n".join(existing_kws)
 
-# -------- 執行流程 --------
+    if not multi_segment_mode:
+        keywords_input = st.text_area(
+            "關鍵字組（每行一個）" + ("" if is_new else "　— 已載入既有設定，編輯後送出會覆寫"),
+            value=default_keywords or "",
+            placeholder="AI\nLLM\nAI Agent",
+            height=140,
+            help="這些關鍵字會在 Google Trends 中合併查詢，作為單一綜合搜尋熱度指標",
+        )
+    else:
+        keywords_input = None
 
-if submit:
+    submit = st.button("🚀 開始分析", type="primary", use_container_width=True)
+
+    if not submit:
+        return
+
+    # --- 執行流程 ---
     if not ticker_for_run:
         st.error("請選擇公司或輸入股票代碼")
-        st.stop()
+        return
 
     if not multi_segment_mode and not (keywords_input or "").strip():
         st.error("請輸入至少一個關鍵字")
-        st.stop()
+        return
 
     bare = _bare(ticker_for_run)
     geo = GEO_OPTIONS[geo_label]
@@ -204,7 +207,6 @@ if submit:
     progress = st.progress(0.0)
     status = st.empty()
 
-    # Step 1: 註冊公司（新公司）或沿用（已有公司）
     if is_new:
         status.info(f"⏳ 步驟 1/5：註冊 {bare} 並查詢公司資訊…")
         try:
@@ -214,12 +216,12 @@ if submit:
             st.warning(f"XQAPI 查詢公司失敗（以代碼代替）：{e}")
             company_name = bare
         _save_company(bare, company_name)
-        company_display_name = company_name
+        local_company_display = company_name
     else:
         status.info(f"⏳ 步驟 1/5：使用已有公司 {bare}（{company_display_name}）")
+        local_company_display = company_display_name
     progress.progress(0.20)
 
-    # Step 2: 設定 segment
     if not multi_segment_mode:
         keywords = [k.strip() for k in (keywords_input or "").splitlines() if k.strip()]
         status.info(f"⏳ 步驟 2/5：儲存關鍵字組（{len(keywords)} 個）…")
@@ -228,12 +230,10 @@ if submit:
         status.info(f"⏳ 步驟 2/5：使用既有 {len(load_segments(bare))} 個 segment 設定…")
     progress.progress(0.35)
 
-    # Step 3: 營收
     status.info("⏳ 步驟 3/5：從 XQAPI 匯入季營收（若已存在會更新）…")
     n_rev = _save_revenue(bare)
     progress.progress(0.50)
 
-    # Step 4: 股價
     status.info("⏳ 步驟 4/5：從 XQAPI 抓取股價 K 線…")
     try:
         kline_payload = get_kline(bare, count=1500)
@@ -244,10 +244,9 @@ if submit:
             upsert_prices(conn, prices_df)
     except Exception as e:
         st.error(f"股價抓取失敗：{e}")
-        st.stop()
+        return
     progress.progress(0.70)
 
-    # Step 5: Google Trends + GITS
     status.info("⏳ 步驟 5/5：抓取 Google Trends 搜尋熱度並計算 GITS（10-30 秒）…")
     segs_for_fetch = load_segments(bare)
     try:
@@ -258,7 +257,7 @@ if submit:
             upsert_trends(conn, trends_df)
     except Exception as e:
         st.error(f"Google Trends 抓取失敗（可能達到頻率限制，請稍候再試）：{e}")
-        st.stop()
+        return
 
     with get_conn() as conn:
         init_schema(conn)
@@ -281,19 +280,17 @@ if submit:
 
     price_weekly = prices["adj_close"].resample("W").last() if not prices.empty else pd.Series(dtype=float)
     progress.progress(1.0)
-    status.success(f"✅ 完成！{company_display_name}（{bare}）")
+    status.success(f"✅ 完成！{local_company_display}（{bare}）")
 
     st.divider()
 
-    # 主圖：GITS + 股價週線
     fig = weekly_gits_vs_price(
         gits_weekly.dropna(),
         price_weekly.dropna(),
-        title=f"{company_display_name} ({bare}) — GITS 搜尋指標 vs 股價（週線）",
+        title=f"{local_company_display} ({bare}) — GITS 搜尋指標 vs 股價（週線）",
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 摘要卡片
     m1, m2, m3, m4 = st.columns(4)
     g = gits_weekly.dropna()
     p = price_weekly.dropna()
@@ -316,3 +313,19 @@ if submit:
 
     if n_rev:
         st.caption(f"💡 已自動匯入/更新 {n_rev} 季營收資料")
+
+
+# -------- 多頁面導覽 --------
+
+pages = [
+    st.Page(_render_home_page, title="GITS分析", icon="🚀", default=True),
+    st.Page("pages/1_詳細報告.py", title="詳細報告", icon="📈"),
+    st.Page("pages/2_使用說明.py", title="使用說明", icon="📖"),
+    st.Page("pages/3_公司清單.py", title="公司清單", icon="🏢"),
+    st.Page("pages/4_關鍵字組.py", title="關鍵字組", icon="🏷"),
+    st.Page("pages/5_營收資料.py", title="營收資料", icon="💰"),
+    st.Page("pages/6_進階執行.py", title="進階執行", icon="⚙"),
+]
+
+pg = st.navigation(pages)
+pg.run()
