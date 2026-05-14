@@ -23,7 +23,7 @@ def three_axis_chart(
     fig.add_trace(
         go.Scatter(
             x=revenue.index, y=revenue.values, name="季營收 (百萬)",
-            line=dict(color="#2ca02c", width=2, dash="dot"), mode="lines+markers",
+            line=dict(color="#2ca02c", width=2), mode="lines+markers",
         ),
         secondary_y=True,
     )
