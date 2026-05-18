@@ -326,6 +326,7 @@ pages = [
     st.Page("pages/5_營收資料.py", title="營收資料", icon="💰"),
     st.Page("pages/6_進階執行.py", title="進階執行", icon="⚙"),
     st.Page("pages/7_夜間燈光.py", title="夜間燈光", icon="🛰"),
+    st.Page("pages/8_主題趨勢.py", title="主題趨勢", icon="🔍"),
 ]
 
 pg = st.navigation(pages)
